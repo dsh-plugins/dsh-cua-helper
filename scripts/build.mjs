@@ -115,14 +115,23 @@ function applySwiftCompatibility(native, source) {
   if (source.commit !== '4b399c39a6d1479cd84ca591b4d7c88e24d38a96') {
     return;
   }
-  // 保留同步的 AX 读取顺序，并向编译器声明闭包沿用调用方的 actor 隔离。
-  const geometry = join(native, 'Sources', 'CuaNative', 'WindowGeometry.swift');
-  const original = readFileSync(geometry, 'utf8');
-  const signature = '        accessibilityBounds: () throws -> WindowBounds?';
-  if (original.split(signature).length !== 2) {
+  // 在同步 AX 层读取窗口边界，避免从 actor 闭包捕获可变的 AX 对象。
+  const access = join(native, 'Sources', 'CuaNative', 'AXAccess.swift');
+  const worker = join(native, 'Sources', 'CuaNative', 'AXWorker.swift');
+  const accessSource = readFileSync(access, 'utf8');
+  const workerSource = readFileSync(worker, 'utf8');
+  const marker = '    func coordinateWindow(_ identity: ProcessIdentity,';
+  const call = 'WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }';
+  if (accessSource.split(marker).length !== 2 || workerSource.split(call).length !== 2) {
     throw new Error('Swift 兼容修复与原始源码不匹配。');
   }
-  writeFileSync(geometry, original.replace(signature, `        isolation: isolated (any Actor)? = #isolation,${original.includes('\r\n') ? '\r\n' : '\n'}${signature}`));
+  const method = [
+    '    func geometryOfEnclosingWindow(_ identity: ProcessIdentity, _ id: UInt32, element: AXUIElement) throws -> WindowInfo {',
+    '        try WindowGeometry.resolve(owner: identity, windowID: id) { try self.bounds(element) }',
+    '    }', '',
+  ].join(accessSource.includes('\r\n') ? '\r\n' : '\n');
+  writeFileSync(access, accessSource.replace(marker, method + marker));
+  writeFileSync(worker, workerSource.replace(call, 'ax().geometryOfEnclosingWindow(identity, enclosing.id, element: enclosing.element)'));
   console.log('已在临时构建副本中应用 Swift actor 隔离兼容修复。');
 }
 
