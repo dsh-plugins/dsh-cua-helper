@@ -84,7 +84,7 @@ export function repository() {
 export async function releaseMap(repo, token = process.env.GH_TOKEN) {
   const releases = new Map();
   for (let page = 1; ; page++) {
-    const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'dsh-cua-helper' };
+    const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'dsh-cua-helper', 'Cache-Control': 'no-cache' };
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }

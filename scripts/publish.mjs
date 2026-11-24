@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, createReadStream, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { checkedAsset, checkedSource, checkedTag, checkedTree, command, completeRelease, git, provenance, readJson, releaseMap, releaseNotes, repository, sha256, sourceAt } from './mirror.mjs';
 
@@ -61,8 +61,36 @@ function syncSource(source, directory) {
   git(['push', '--atomic', 'origin', 'HEAD:refs/heads/main', `HEAD:refs/tags/${source.tag}`]);
 }
 
+function api(method, path, fields = []) {
+  return JSON.parse(gh(['api', '--method', method, `repos/${repo}/${path}`, ...fields]));
+}
+
+async function upload(id, asset) {
+  const response = await fetch(`https://uploads.github.com/repos/${repo}/releases/${id}/assets?name=${encodeURIComponent(asset.filename)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.GH_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': String(asset.size),
+      'User-Agent': 'dsh-cua-helper',
+    },
+    body: createReadStream(asset.path),
+    duplex: 'half',
+    redirect: 'error',
+    signal: AbortSignal.timeout(180000),
+  });
+  if (!response.ok) {
+    throw new Error(`上传 ${asset.filename} 失败：HTTP ${response.status} ${await response.text()}`);
+  }
+  const uploaded = await response.json();
+  if (uploaded.name !== asset.filename || uploaded.state !== 'uploaded' || uploaded.size !== asset.size || uploaded.digest !== `sha256:${asset.sha256}`) {
+    throw new Error(`上传后的 ${asset.filename} 未通过摘要校验。`);
+  }
+}
+
 function verifyRemoteAssets(id, assets) {
-  const remote = JSON.parse(gh(['api', `repos/${repo}/releases/${id}/assets?per_page=100`]));
+  const remote = api('GET', `releases/${id}/assets?per_page=100`);
   for (const expected of assets) {
     if (!remote.some((item) => item.name === expected.filename && item.state === 'uploaded' && item.size === expected.size &&
       item.digest === `sha256:${expected.sha256}`)) {
@@ -103,24 +131,26 @@ async function publish(plan) {
   const notes = join(output, 'notes.md');
   writeFileSync(notes, releaseNotes(repo, source));
   if (!release) {
-    gh(['release', 'create', source.tag, '--repo', repo, '--verify-tag', '--draft', '--title', source.tag,
-      '--notes-file', notes, ...(source.prerelease ? ['--prerelease'] : [])]);
-    release = (await releaseMap(repo)).get(source.tag);
+    release = api('POST', 'releases', ['-f', `tag_name=${source.tag}`, '-f', `name=${source.tag}`, '-F', `body=@${notes}`,
+      '-F', 'draft=true', '-F', `prerelease=${source.prerelease}`]);
   }
-  if (!release?.draft || !release.body?.includes(provenance(source))) {
+  if (!Number.isSafeInteger(release?.id) || !release.draft || release.tag_name !== source.tag || !release.body?.includes(provenance(source))) {
     throw new Error('未找到本工作流创建的草稿 Release。');
   }
+  const previousAssets = api('GET', `releases/${release.id}/assets?per_page=100`);
   for (const asset of assets) {
-    const existing = release.assets.find((item) => item.name === asset.filename);
+    const existing = previousAssets.find((item) => item.name === asset.filename);
     if (existing?.state === 'uploaded' && existing.digest === `sha256:${asset.sha256}` && existing.size === asset.size) {
       continue;
     }
-    gh(['release', 'upload', source.tag, asset.path, '--repo', repo, ...(existing ? ['--clobber'] : [])]);
+    if (existing) {
+      gh(['api', '--method', 'DELETE', `repos/${repo}/releases/assets/${existing.id}`]);
+    }
+    await upload(release.id, asset);
   }
   verifyRemoteAssets(release.id, assets);
-  gh(['release', 'edit', source.tag, '--repo', repo, '--draft=false', '--notes-file', notes,
-    ...(source.prerelease ? ['--latest=false'] : [])]);
-  const published = (await releaseMap(repo)).get(source.tag);
+  const published = api('PATCH', `releases/${release.id}`, ['-F', 'draft=false', '-F', `body=@${notes}`,
+    ...(source.prerelease ? ['-f', 'make_latest=false'] : [])]);
   if (!completeRelease(published, source)) {
     throw new Error('Release 公开后未通过完整性检查。');
   }
