@@ -63,13 +63,15 @@ Run `node --test` and `actionlint` in this repository. To build from a committed
 node scripts/build.mjs versions/dsh-v0.2.3-alpha.2 win-x64 out
 ```
 
-On a compatible macOS host with Swift 6 and Python 3, use:
+On a compatible macOS host with Xcode 26.3 and Python 3, use:
 
 ```sh
 node scripts/build.mjs versions/dsh-v0.2.3-alpha.2 darwin-arm64 out
 ```
 
 Use an empty output directory. The script writes the ZIP and a JSON file with its digest and build identity. CI publishes the ZIPs and a consolidated `SHA256SUMS` file.
+
+For `dsh-v0.2.3-alpha.2`, the macOS build applies a Swift compiler compatibility fix to the temporary build copy. It keeps window geometry reads in the existing synchronous accessibility code and preserves the original check order. The snapshot retains the tagged upstream files.
 
 ## License
 

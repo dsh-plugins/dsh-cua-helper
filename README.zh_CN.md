@@ -63,13 +63,15 @@ gh workflow run mirror.yml --repo dsh-plugins/dsh-cua-helper --ref main -f upstr
 node scripts/build.mjs versions/dsh-v0.2.3-alpha.2 win-x64 out
 ```
 
-在安装 Swift 6 和 Python 3 的兼容 macOS 主机上运行：
+在安装 Xcode 26.3 和 Python 3 的兼容 macOS 主机上运行：
 
 ```sh
 node scripts/build.mjs versions/dsh-v0.2.3-alpha.2 darwin-arm64 out
 ```
 
 输出目录必须为空。脚本会写入 ZIP 及包含摘要和构建身份的 JSON 文件。CI 会发布 ZIP 和汇总的 `SHA256SUMS` 文件。
+
+`dsh-v0.2.3-alpha.2` 的 macOS 构建会在临时副本中应用 Swift 编译兼容修复，将窗口几何读取保留在既有同步辅助功能代码中，并维持原有检查顺序。源码快照保留上游标签的原始文件。
 
 ## 许可证
 
