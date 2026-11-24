@@ -19,10 +19,10 @@ export function peMachine(data) {
   return data.readUInt16LE(offset + 4);
 }
 
-function copyWindowsNotices(runtime, project, payload) {
+function copyWindowsNotices(assetsFile, target, payload) {
   const notices = join(payload, 'licenses');
   mkdirSync(notices);
-  const resolved = readJson(join(runtime, 'obj', 'project.assets.json'));
+  const resolved = readJson(assetsFile);
   const graph = readJson(join(payload, 'dsh-cua-windows.deps.json'));
   const packages = Object.entries(graph.libraries).filter(([, library]) => library.type === 'package');
   const index = [];
@@ -103,7 +103,9 @@ function windows(native, target, payload) {
   if (peMachine(readFileSync(executable)) !== (target === 'win-x64' ? 0x8664 : 0xaa64)) {
     throw new Error(`打包后的 exe 架构与 ${target} 不匹配。`);
   }
-  copyWindowsNotices(join(native, 'entry'), target, payload);
+  const assetsFile = command('dotnet', ['msbuild', entry, '-nologo', '-getProperty:ProjectAssetsFile', `-p:RuntimeIdentifier=${target}`, '-p:EnableWindowsTargeting=true'], { cwd: native });
+  regularFile(assetsFile);
+  copyWindowsNotices(assetsFile, target, payload);
 }
 
 function macos(native, target, scratch, payload) {

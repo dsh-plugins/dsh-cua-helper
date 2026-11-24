@@ -96,6 +96,15 @@ jobs:
         if: runner.os == 'Windows'
         with:
           dotnet-version: '10.0.x'
+      - name: Select Xcode 26.3 for the upstream Swift code
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          export DEVELOPER_DIR=/Applications/Xcode_26.3.app/Contents/Developer
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          xcrun swift --version
+          printf 'DEVELOPER_DIR=%s\n' "$DEVELOPER_DIR" >> "$GITHUB_ENV"
       - name: Build, test and package native helper
         shell: pwsh
         env:
