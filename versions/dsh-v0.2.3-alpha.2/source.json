@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "tag": "dsh-v0.2.3-alpha.2",
+  "commit": "4b399c39a6d1479cd84ca591b4d7c88e24d38a96",
+  "prerelease": true,
+  "publishedAt": "2026-11-22T11:00:39Z",
+  "targets": [
+    "win-x64",
+    "win-arm64",
+    "darwin-arm64",
+    "darwin-x64"
+  ],
+  "sources": {
+    "windows": "packages/experimental/cua-windows/native",
+    "macos": "packages/experimental/cua-macos/native"
+  }
+}
