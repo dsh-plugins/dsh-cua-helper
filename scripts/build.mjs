@@ -43,28 +43,31 @@ function copyWindowsNotices(assetsFile, target, payload) {
     }
     index.push(`- ${id}: https://www.nuget.org/packages/${id}`);
   }
+  const runtimePacks = new Set([`microsoft.netcore.app.runtime.${target}`, `microsoft.windowsdesktop.app.runtime.${target}`]);
   for (const download of Object.values(resolved.project.frameworks).flatMap((framework) => framework.downloadDependencies ?? [])) {
-    if (!/^Microsoft\.NETCore\.App\.Runtime\.|^Microsoft\.WindowsDesktop\.App\.Runtime\./i.test(download.name)) {
+    const name = download.name.toLowerCase();
+    if (!runtimePacks.has(name)) {
       continue;
     }
-    const version = /^\[([^,\]]+)\]$/.exec(download.version)?.[1];
-    const restored = lookup(`${download.name.toLowerCase()}/${version}`);
+    const match = /^\[\s*([^,\]\s]+)(?:\s*,\s*\1)?\s*\]$/.exec(download.version);
+    const version = match?.[1] ?? (/^[\w.-]+$/.test(download.version) ? download.version : undefined);
+    const restored = version && lookup(`${name}/${version}`);
     if (!restored) {
-      throw new Error(`未找到 .NET 运行库的授权文件来源：${download.name} ${version}。`);
+      continue;
     }
     const directory = join(notices, `${download.name}-${version}`);
-    mkdirSync(directory);
-    const legalFiles = readdirSync(restored).filter((name) => /^(?:license|third[-_. ]?party|notice)/i.test(name));
-    for (const name of legalFiles) {
-      copyFileSync(join(restored, name), join(directory, name));
-    }
+    const legalFiles = readdirSync(restored).filter((entry) => /^(?:license|third[-_. ]?party|notice)/i.test(entry));
     if (legalFiles.length) {
-      foundRuntimeNotice.add(download.name);
+      mkdirSync(directory);
+      for (const entry of legalFiles) {
+        copyFileSync(join(restored, entry), join(directory, entry));
+      }
+      foundRuntimeNotice.add(name);
     }
   }
   for (const dir of Object.keys(resolved.packageFolders)) {
-    for (const id of ['microsoft.netcore.app.runtime.' + project, 'microsoft.windowsdesktop.app.runtime.' + project]) {
-      if ([...foundRuntimeNotice].some((name) => name.toLowerCase() === id) || !existsSync(join(dir, id))) {
+    for (const id of runtimePacks) {
+      if (foundRuntimeNotice.has(id) || !existsSync(join(dir, id))) {
         continue;
       }
       for (const version of readdirSync(join(dir, id))) {
@@ -108,7 +111,23 @@ function windows(native, target, payload) {
   copyWindowsNotices(assetsFile, target, payload);
 }
 
-function macos(native, target, scratch, payload) {
+function applySwiftCompatibility(native, source) {
+  if (source.commit !== '4b399c39a6d1479cd84ca591b4d7c88e24d38a96') {
+    return;
+  }
+  // 保留同步的 AX 读取顺序，并向编译器声明闭包沿用调用方的 actor 隔离。
+  const geometry = join(native, 'Sources', 'CuaNative', 'WindowGeometry.swift');
+  const original = readFileSync(geometry, 'utf8');
+  const signature = '        accessibilityBounds: () throws -> WindowBounds?';
+  if (original.split(signature).length !== 2) {
+    throw new Error('Swift 兼容修复与原始源码不匹配。');
+  }
+  writeFileSync(geometry, original.replace(signature, `        isolation: isolated (any Actor)? = #isolation,${original.includes('\r\n') ? '\r\n' : '\n'}${signature}`));
+  console.log('已在临时构建副本中应用 Swift actor 隔离兼容修复。');
+}
+
+function macos(native, target, scratch, payload, source) {
+  applySwiftCompatibility(native, source);
   const arch = target === 'darwin-x64' ? 'x86_64' : 'arm64';
   const out = join(scratch, 'package');
   run('/usr/bin/xcrun', ['python3', join(native, 'build_app.py'), '--arch', arch, '--scratch-path', join(scratch, 'swift'), '--output-directory', out, '--variant', 'dev', '--identity', '-'], native);
@@ -173,7 +192,7 @@ async function build(args) {
     if (onWindows) {
       windows(copy, target, payload);
     } else {
-      macos(copy, target, scratch, payload);
+      macos(copy, target, scratch, payload, source);
     }
     const zip = join(scratch, filename);
     if (onWindows) {
