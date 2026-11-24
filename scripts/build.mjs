@@ -132,7 +132,15 @@ function applySwiftCompatibility(native, source) {
   ].join(accessSource.includes('\r\n') ? '\r\n' : '\n');
   writeFileSync(access, accessSource.replace(marker, method + marker));
   writeFileSync(worker, workerSource.replace(call, 'ax().geometryOfEnclosingWindow(identity, enclosing.id, element: enclosing.element)'));
-  console.log('已在临时构建副本中应用 Swift actor 隔离兼容修复。');
+  const testFile = join(native, 'tests', 'swift', 'SharedHelperTests.swift');
+  const testSource = readFileSync(testFile, 'utf8');
+  const assertion = '    #expect(lstat(try #require(options.failurePath), &info) == 0)';
+  if (testSource.split(assertion).length !== 2) {
+    throw new Error('Swift 测试兼容修复与原始源码不匹配。');
+  }
+  const newline = testSource.includes('\r\n') ? '\r\n' : '\n';
+  writeFileSync(testFile, testSource.replace(assertion, ['    let failurePath: String = try #require(options.failurePath)', '    let failureStat = lstat(failurePath, &info)', '    #expect(failureStat == 0)'].join(newline)));
+  console.log('已在临时构建副本中应用 Swift 生产代码与测试兼容修复。');
 }
 
 function macos(native, target, scratch, payload, source) {
