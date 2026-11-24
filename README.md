@@ -71,7 +71,7 @@ node scripts/build.mjs versions/dsh-v0.2.3-alpha.2 darwin-arm64 out
 
 Use an empty output directory. The script writes the ZIP and a JSON file with its digest and build identity. CI publishes the ZIPs and a consolidated `SHA256SUMS` file.
 
-For `dsh-v0.2.3-alpha.2`, the macOS build applies a Swift compiler compatibility fix to the temporary build copy. It keeps window geometry reads in the existing synchronous accessibility code and preserves the original check order. The snapshot retains the tagged upstream files.
+For `dsh-v0.2.3-alpha.2`, the macOS build applies a Swift compiler compatibility fix to the temporary build copy. It keeps window geometry reads in the existing synchronous accessibility code and preserves the original check order. The snapshot retains the tagged upstream files. Intel runs the full Swift suite. Apple Silicon runs the native protocol and window geometry smoke tests because the full suite stalled on its hosted runner.
 
 ## License
 

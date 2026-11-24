@@ -71,7 +71,7 @@ node scripts/build.mjs versions/dsh-v0.2.3-alpha.2 darwin-arm64 out
 
 输出目录必须为空。脚本会写入 ZIP 及包含摘要和构建身份的 JSON 文件。CI 会发布 ZIP 和汇总的 `SHA256SUMS` 文件。
 
-`dsh-v0.2.3-alpha.2` 的 macOS 构建会在临时副本中应用 Swift 编译兼容修复，将窗口几何读取保留在既有同步辅助功能代码中，并维持原有检查顺序。源码快照保留上游标签的原始文件。
+`dsh-v0.2.3-alpha.2` 的 macOS 构建会在临时副本中应用 Swift 编译兼容修复，将窗口几何读取保留在既有同步辅助功能代码中，并维持原有检查顺序。源码快照保留上游标签的原始文件。Intel 执行完整 Swift 测试套件。Apple Silicon 的托管 runner 执行完整套件时长时间未退出，因此执行原生协议和窗口几何冒烟测试。
 
 ## 许可证
 
