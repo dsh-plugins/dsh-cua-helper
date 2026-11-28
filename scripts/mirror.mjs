@@ -199,7 +199,8 @@ export function releaseNotes(repo, source) {
     '', `[SHA-256 checksums / 校验和](https://github.com/${repo}/releases/download/${source.tag}/SHA256SUMS)`,
     '', 'Community build. Windows ZIPs include unsigned helpers and their runtime files. Windows ARM64 is cross-built and architecture-checked, without an ARM64 runtime test. macOS ZIPs contain ad-hoc signed, non-notarized apps. No interactive desktop test was run.',
     '', '社区构建。Windows ZIP 含未签名助手及配套运行库；ARM64 交叉编译后校验二进制架构，未在 ARM64 上运行。macOS ZIP 内的应用采用临时签名，未经 Apple 公证。未执行交互式桌面测试。',
-    ...(source.tag === 'dsh-v0.2.3-alpha.2' ? ['', 'This tag applies a Swift compiler compatibility fix to the macOS build copy. Intel runs the full Swift suite. Apple Silicon runs native protocol and window geometry smoke tests.', '', '此标签的 macOS 临时构建副本应用了 Swift 编译兼容修复。Intel 执行完整 Swift 套件，Apple Silicon 执行原生协议和窗口几何冒烟测试。'] : []),
+    ...(source.targets.some((target) => target.startsWith('darwin-')) ? ['', 'The macOS build applies a Swift compiler compatibility fix to the temporary build copy. Intel runs the full Swift suite.', '', 'macOS 临时构建副本应用了 Swift 编译兼容修复。Intel 执行完整 Swift 套件。'] : []),
+    ...(source.tag === 'dsh-v0.2.3-alpha.2' ? ['', 'Apple Silicon runs native protocol and window geometry smoke tests.', '', 'Apple Silicon 执行原生协议和窗口几何冒烟测试。'] : []),
     '', 'Extract the entire ZIP. See [setup / 配置](https://github.com/' + repo + '#setup).', '',
   ].join('\n');
 }

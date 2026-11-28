@@ -111,10 +111,7 @@ function windows(native, target, payload) {
   copyWindowsNotices(assetsFile, target, payload);
 }
 
-function applySwiftCompatibility(native, source) {
-  if (source.commit !== '4b399c39a6d1479cd84ca591b4d7c88e24d38a96') {
-    return;
-  }
+export function applySwiftCompatibility(native) {
   // 在同步 AX 层读取窗口边界，避免从 actor 闭包捕获可变的 AX 对象。
   const access = join(native, 'Sources', 'CuaNative', 'AXAccess.swift');
   const worker = join(native, 'Sources', 'CuaNative', 'AXWorker.swift');
@@ -144,7 +141,7 @@ function applySwiftCompatibility(native, source) {
 }
 
 function macos(native, target, scratch, payload, source) {
-  applySwiftCompatibility(native, source);
+  applySwiftCompatibility(native);
   const arch = target === 'darwin-x64' ? 'x86_64' : 'arm64';
   const out = join(scratch, 'package');
   run('/usr/bin/xcrun', ['python3', join(native, 'build_app.py'), '--arch', arch, '--scratch-path', join(scratch, 'swift'), '--output-directory', out, '--variant', 'dev', '--identity', '-'], native);

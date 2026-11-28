@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { assetName, batch, checkedSource, checkedTag, completeRelease, provenance, releaseNotes } from '../scripts/mirror.mjs';
 import { eligibleRelease } from '../scripts/source.mjs';
-import { peMachine } from '../scripts/build.mjs';
+import { applySwiftCompatibility, peMachine } from '../scripts/build.mjs';
 
 const source = {
   schemaVersion: 1,
@@ -67,4 +70,46 @@ test('PE 架构解析检查边界和机器类型', () => {
   assert.equal(peMachine(binary), 0xaa64);
   binary.writeUInt32LE(200, 60);
   assert.throws(() => peMachine(binary));
+});
+
+test('Swift 兼容修复转换临时源码并拒绝重复标记', (context) => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-cua-swift-test-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const sourceDirectory = join(root, 'Sources', 'CuaNative');
+  const testDirectory = join(root, 'tests', 'swift');
+  mkdirSync(sourceDirectory, { recursive: true });
+  mkdirSync(testDirectory, { recursive: true });
+  const access = join(sourceDirectory, 'AXAccess.swift');
+  const worker = join(sourceDirectory, 'AXWorker.swift');
+  const sharedTests = join(testDirectory, 'SharedHelperTests.swift');
+  const marker = '    func coordinateWindow(_ identity: ProcessIdentity,';
+  const call = 'WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }';
+  const assertion = '    #expect(lstat(try #require(options.failurePath), &info) == 0)';
+  const writeOriginal = () => {
+    writeFileSync(access, `${marker}\n`);
+    writeFileSync(worker, `window = try ${call}\n`);
+    writeFileSync(sharedTests, `${assertion}\n`);
+  };
+  writeOriginal();
+
+  applySwiftCompatibility(root);
+
+  assert.equal(readFileSync(access, 'utf8'), [
+    '    func geometryOfEnclosingWindow(_ identity: ProcessIdentity, _ id: UInt32, element: AXUIElement) throws -> WindowInfo {',
+    '        try WindowGeometry.resolve(owner: identity, windowID: id) { try self.bounds(element) }',
+    '    }',
+    marker,
+    '',
+  ].join('\n'));
+  assert.equal(readFileSync(worker, 'utf8'), 'window = try ax().geometryOfEnclosingWindow(identity, enclosing.id, element: enclosing.element)\n');
+  assert.equal(readFileSync(sharedTests, 'utf8'), [
+    '    let failurePath: String = try #require(options.failurePath)',
+    '    let failureStat = lstat(failurePath, &info)',
+    '    #expect(failureStat == 0)',
+    '',
+  ].join('\n'));
+
+  writeOriginal();
+  writeFileSync(access, `${marker}\n${marker}\n`);
+  assert.throws(() => applySwiftCompatibility(root), /Swift 兼容修复与原始源码不匹配/);
 });
